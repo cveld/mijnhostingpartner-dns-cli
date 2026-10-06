@@ -15,6 +15,12 @@ npx mijnhostingpartner-dns-cli login
 npx mijnhostingpartner-dns-cli list example.nl
 ```
 
+De korte commandonaam kan met npm exec worden gebruikt:
+
+```powershell
+npm exec --package mijnhostingpartner-dns-cli -- mhp-dns --help
+```
+
 Of installeer de CLI globaal:
 
 ```powershell

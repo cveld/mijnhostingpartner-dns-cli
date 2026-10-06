@@ -20,6 +20,7 @@
   ],
   "type": "module",
   "bin": {
+    "mijnhostingpartner-dns-cli": "dist/cli.js",
     "mhp-dns": "dist/cli.js"
   },
   "files": [
