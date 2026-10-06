@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
@@ -8,6 +9,7 @@ import { getDomain, parseDnsUrl, profileDirectory, saveDomain } from "./config.j
 import { recordTypes, type DnsRecord, type DnsRecordType, type RecordInput } from "./types.js";
 
 interface GlobalOptions { headed?: boolean; json?: boolean }
+const packageVersion = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 const globals = (command: Command) => command.optsWithGlobals<GlobalOptions>();
 
 async function session<T>(command: Command, action: (api: MhpApi) => Promise<T>): Promise<T> {
@@ -84,7 +86,7 @@ function displayRecords(records: DnsRecord[]): object[] {
 const program = new Command()
   .name("mhp-dns")
   .description("Manage MijnHostingPartner DNS through its control-panel API and a persisted Playwright login.")
-  .version("0.1.0")
+  .version(packageVersion)
   .option("--headed", "show Chrome while running")
   .option("--json", "write machine-readable JSON");
 

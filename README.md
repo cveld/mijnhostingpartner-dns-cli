@@ -8,6 +8,22 @@ CLI voor DNS-beheer bij MijnHostingPartner. Playwright bewaart een apart Chrome-
 
 Node.js 22+ en Google Chrome zijn vereist.
 
+Zonder installatie, via npm:
+
+```powershell
+npx mijnhostingpartner-dns-cli login
+npx mijnhostingpartner-dns-cli list example.nl
+```
+
+Of installeer de CLI globaal:
+
+```powershell
+npm install --global mijnhostingpartner-dns-cli
+mhp-dns --help
+```
+
+Voor lokale ontwikkeling:
+
 ```powershell
 npm install
 npm run build
@@ -65,3 +81,15 @@ Environmentvariabelen:
 - `POST /api/Account/Domain/GetDomainsPagedList`
 
 De publieke Swagger-pagina beschrijft alleen de losse Automation Connector en niet deze DNS-endpoints.
+
+## Releases en npm-publicatie
+
+Release Please onderhoudt op basis van Conventional Commits een release-PR. Na het mergen van die PR maakt de workflow een GitHub-release en publiceert dezelfde versie naar npm.
+
+Gebruik commit-prefixen als `fix:`, `feat:` en `feat!:`. Voor de eerste publicatie moet de repository secret `NPM_TOKEN` een npm automation/granular access token met publish-rechten bevatten. Configureer daarna bij het npm-package bij voorkeur GitHub Actions als Trusted Publisher:
+
+- GitHub owner: `cveld`
+- Repository: `mijnhostingpartner-dns-cli`
+- Workflow: `release-please.yml`
+
+De workflow heeft al `id-token: write` en gebruikt een npm-versie met OIDC-ondersteuning. Nadat Trusted Publishing werkt, kan `NPM_TOKEN` worden verwijderd.

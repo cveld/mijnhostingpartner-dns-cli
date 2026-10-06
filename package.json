@@ -1,13 +1,38 @@
 {
   "name": "mijnhostingpartner-dns-cli",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.0",
   "description": "Manage MijnHostingPartner DNS records from the command line.",
+  "license": "MIT",
+  "author": "Carl in 't Veld",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cveld/mijnhostingpartner-dns-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cveld/mijnhostingpartner-dns-cli/issues"
+  },
+  "homepage": "https://github.com/cveld/mijnhostingpartner-dns-cli#readme",
+  "keywords": [
+    "dns",
+    "cli",
+    "mijnhostingpartner",
+    "playwright"
+  ],
   "type": "module",
   "bin": { "mhp-dns": "dist/cli.js" },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build",
     "start": "tsx src/cli.ts",
     "test": "node --test --import tsx test/*.test.ts"
   },
