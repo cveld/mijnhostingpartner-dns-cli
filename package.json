@@ -1,0 +1,24 @@
+{
+  "name": "mijnhostingpartner-dns-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Manage MijnHostingPartner DNS records from the command line.",
+  "type": "module",
+  "bin": { "mhp-dns": "dist/cli.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "tsx src/cli.ts",
+    "test": "node --test --import tsx test/*.test.ts"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "playwright-core": "^1.55.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "engines": { "node": ">=22" }
+}
