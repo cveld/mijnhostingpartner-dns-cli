@@ -1,83 +1,118 @@
 # MijnHostingPartner DNS CLI
 
-CLI voor DNS-beheer bij MijnHostingPartner. Playwright bewaart een apart Chrome-profiel voor de login. De commando's gebruiken daarna rechtstreeks de interne JSON-endpoints van het control panel; dat is sneller en minder kwetsbaar dan knoppen aanklikken.
+A command-line tool for managing DNS records at [MijnHostingPartner.nl](https://www.mijnhostingpartner.nl/).
 
-> Dit is een ongedocumenteerde control-panel-API. MijnHostingPartner kan endpoints of payloads zonder aankondiging wijzigen.
+The CLI uses Playwright to keep an authenticated Chrome profile. After authentication, commands call the control panel's internal JSON endpoints directly, which is faster and less brittle than automating UI interactions.
 
-## Installeren
+> [!WARNING]
+> This project uses an undocumented control-panel API. MijnHostingPartner may change its endpoints or payloads without notice.
 
-Node.js 22+ en Google Chrome zijn vereist.
+## Requirements
 
-Zonder installatie, via npm:
+- Node.js 22 or newer
+- Google Chrome
+- A MijnHostingPartner account with access to the domain
+
+## Run with npx
+
+No global installation is required:
 
 ```powershell
 npx mijnhostingpartner-dns-cli login
 npx mijnhostingpartner-dns-cli list example.nl
 ```
 
-De korte commandonaam kan met npm exec worden gebruikt:
+The shorter executable name is also available through `npm exec`:
 
 ```powershell
 npm exec --package mijnhostingpartner-dns-cli -- mhp-dns --help
 ```
 
-Of installeer de CLI globaal:
+Alternatively, install the CLI globally:
 
 ```powershell
 npm install --global mijnhostingpartner-dns-cli
 mhp-dns --help
 ```
 
-Voor lokale ontwikkeling:
+## Install the agent skill
+
+Install the bundled skill with the [Skills CLI](https://skills.sh/):
+
+```powershell
+npx skills add cveld/mijnhostingpartner-dns-cli --skill mijnhostingpartner-dns
+```
+
+Add `-g` to make it available to supported agents across all projects:
+
+```powershell
+npx skills add cveld/mijnhostingpartner-dns-cli --skill mijnhostingpartner-dns -g
+```
+
+## Sign in once
+
+```powershell
+npx mijnhostingpartner-dns-cli login
+```
+
+The CLI opens Chrome in headed mode. Sign in manually, complete MFA if required, and then press Enter in the terminal. Cookies and session data are stored outside the repository in `~/.mhp-dns/browser-profile`.
+
+## Register a domain
+
+Copy the URL of the domain's DNS records page from the control panel:
+
+```powershell
+npx mijnhostingpartner-dns-cli domain add example.nl --url "https://control.mijnhostingpartner.nl/account/domains/dns-records?userId=123&packageId=456&id=789"
+```
+
+Only the domain identifiers are saved. Credentials and DNS records are not written to the configuration file.
+
+If you only know the hosting package ID, discover its domains first:
+
+```powershell
+npx mijnhostingpartner-dns-cli domain discover --package-id 456
+```
+
+## Usage
+
+```powershell
+npx mijnhostingpartner-dns-cli list example.nl
+npx mijnhostingpartner-dns-cli list example.nl --type TXT --json
+npx mijnhostingpartner-dns-cli add example.nl api --type A --data 192.0.2.10 --ttl 3600
+npx mijnhostingpartner-dns-cli update example.nl api --match-type A --data 192.0.2.20
+npx mijnhostingpartner-dns-cli delete example.nl api --type A --data 192.0.2.20
+```
+
+Use `@` for the zone apex. Mutating commands ask for confirmation; pass `--yes` to skip it.
+
+Use the global `--headed` option to keep Chrome visible while debugging:
+
+```powershell
+npx mijnhostingpartner-dns-cli --headed list example.nl
+```
+
+## Configuration
+
+| Environment variable | Purpose |
+| --- | --- |
+| `MHP_DNS_HOME` | Location of the configuration and browser profile |
+| `MHP_DNS_PROFILE` | Override the browser profile directory |
+| `MHP_DNS_CONFIG` | Override the configuration file path |
+| `MHP_DNS_CHROME` | Explicit path to the Chrome executable |
+
+## Local development
 
 ```powershell
 npm install
+npm run check
+npm test
 npm run build
 npm link
 ```
 
-## Eenmalig inloggen
+## Internal endpoints
 
-```powershell
-mhp-dns login
-```
-
-Chrome start headed. Log handmatig in en druk daarna in de terminal op Enter. Cookies en sessiegegevens staan buiten de repository in `~/.mhp-dns/browser-profile`.
-
-## Domein registreren
-
-Kopieer de URL van de DNS-recordpagina:
-
-```powershell
-mhp-dns domain add example.nl --url "https://control.mijnhostingpartner.nl/account/domains/dns-records?userId=123&packageId=456&id=789"
-```
-
-Alleen de identifiers worden opgeslagen; niet de DNS-records of credentials.
-
-## Gebruik
-
-```powershell
-mhp-dns list example.nl
-mhp-dns list example.nl --type TXT --json
-mhp-dns add example.nl api --type A --data 192.0.2.10 --ttl 3600
-mhp-dns update example.nl api --match-type A --data 192.0.2.20
-mhp-dns delete example.nl api --type A --data 192.0.2.20
-```
-
-Gebruik `@` voor het zone-apex. Wijzigingen vragen bevestiging; `--yes` slaat die over. Met de globale optie `--headed` blijft Chrome zichtbaar tijdens een commando:
-
-```powershell
-mhp-dns --headed list example.nl
-```
-
-Environmentvariabelen:
-
-- `MHP_DNS_HOME`: locatie van configuratie en browserprofiel.
-- `MHP_DNS_PROFILE`: afwijkende locatie van het browserprofiel.
-- `MHP_DNS_CONFIG`: afwijkend configuratiebestand.
-- `MHP_DNS_CHROME`: expliciet pad naar Chrome.
-
-## Ontdekte endpoints
+The following control-panel endpoints were discovered:
 
 - `POST /api/Account/DomainDns/GetDnsZoneRecords`
 - `POST /api/Account/DomainDns/AddDnsZoneRecord`
@@ -86,16 +121,20 @@ Environmentvariabelen:
 - `POST /api/Account/Domain/GetDomain`
 - `POST /api/Account/Domain/GetDomainsPagedList`
 
-De publieke Swagger-pagina beschrijft alleen de losse Automation Connector en niet deze DNS-endpoints.
+The public Swagger page only describes the separate Automation Connector and does not include these DNS endpoints.
 
-## Releases en npm-publicatie
+## Releases and npm publishing
 
-Release Please onderhoudt op basis van Conventional Commits een release-PR. Na het mergen van die PR maakt de workflow een GitHub-release en publiceert dezelfde versie via npm Trusted Publishing.
+Release Please maintains a release pull request based on Conventional Commits. Merging that pull request creates a GitHub release and publishes the same version through npm Trusted Publishing.
 
-Gebruik commit-prefixen als `fix:`, `feat:` en `feat!:`. Configureer bij het npm-package GitHub Actions als Trusted Publisher:
+Use commit prefixes such as `fix:`, `feat:`, and `feat!:`. The npm Trusted Publisher is configured for:
 
 - GitHub owner: `cveld`
 - Repository: `mijnhostingpartner-dns-cli`
 - Workflow: `release-please.yml`
 
-De workflow heeft `id-token: write` en gebruikt een npm-versie met OIDC-ondersteuning. Er is geen `NPM_TOKEN` nodig. npm voegt bij publicatie via Trusted Publishing automatisch provenance toe.
+The workflow uses OIDC and does not require an `NPM_TOKEN`. npm automatically attaches provenance when publishing through Trusted Publishing.
+
+## License
+
+[MIT](LICENSE)
