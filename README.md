@@ -92,4 +92,4 @@ Gebruik commit-prefixen als `fix:`, `feat:` en `feat!:`. Voor de eerste publicat
 - Repository: `mijnhostingpartner-dns-cli`
 - Workflow: `release-please.yml`
 
-De workflow heeft al `id-token: write` en gebruikt een npm-versie met OIDC-ondersteuning. Nadat Trusted Publishing werkt, kan `NPM_TOKEN` worden verwijderd.
+De workflow heeft al `id-token: write` en gebruikt een npm-versie met OIDC-ondersteuning. npm voegt bij publicatie via Trusted Publishing automatisch provenance toe. Nadat Trusted Publishing werkt, kan `NPM_TOKEN` worden verwijderd.
