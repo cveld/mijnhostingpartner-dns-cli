@@ -84,12 +84,12 @@ De publieke Swagger-pagina beschrijft alleen de losse Automation Connector en ni
 
 ## Releases en npm-publicatie
 
-Release Please onderhoudt op basis van Conventional Commits een release-PR. Na het mergen van die PR maakt de workflow een GitHub-release en publiceert dezelfde versie naar npm.
+Release Please onderhoudt op basis van Conventional Commits een release-PR. Na het mergen van die PR maakt de workflow een GitHub-release en publiceert dezelfde versie via npm Trusted Publishing.
 
-Gebruik commit-prefixen als `fix:`, `feat:` en `feat!:`. Voor de eerste publicatie moet de repository secret `NPM_TOKEN` een npm automation/granular access token met publish-rechten bevatten. Configureer daarna bij het npm-package bij voorkeur GitHub Actions als Trusted Publisher:
+Gebruik commit-prefixen als `fix:`, `feat:` en `feat!:`. Configureer bij het npm-package GitHub Actions als Trusted Publisher:
 
 - GitHub owner: `cveld`
 - Repository: `mijnhostingpartner-dns-cli`
 - Workflow: `release-please.yml`
 
-De workflow heeft al `id-token: write` en gebruikt een npm-versie met OIDC-ondersteuning. npm voegt bij publicatie via Trusted Publishing automatisch provenance toe. Nadat Trusted Publishing werkt, kan `NPM_TOKEN` worden verwijderd.
+De workflow heeft `id-token: write` en gebruikt een npm-versie met OIDC-ondersteuning. Er is geen `NPM_TOKEN` nodig. npm voegt bij publicatie via Trusted Publishing automatisch provenance toe.
