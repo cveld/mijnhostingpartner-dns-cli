@@ -1,6 +1,6 @@
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, readFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright-core";
-import { profileDirectory } from "./config.js";
+import { profileDirectory, storageStatePath } from "./config.js";
 
 export const baseUrl = "https://control.mijnhostingpartner.nl";
 
@@ -24,12 +24,19 @@ async function findChrome(): Promise<string | undefined> {
 export async function openBrowser(headed: boolean): Promise<BrowserContext> {
   await mkdir(profileDirectory, { recursive: true });
   const executablePath = await findChrome();
-  return chromium.launchPersistentContext(profileDirectory, {
+  const context = await chromium.launchPersistentContext(profileDirectory, {
     headless: !headed,
     executablePath,
     channel: executablePath ? undefined : "chrome",
     viewport: headed ? null : { width: 1440, height: 1000 },
   });
+  try {
+    const state = JSON.parse(await readFile(storageStatePath, "utf8")) as { cookies?: Parameters<BrowserContext["addCookies"]>[0] };
+    if (state.cookies?.length) await context.addCookies(state.cookies);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return context;
 }
 
 export async function getPage(context: BrowserContext): Promise<Page> {
@@ -49,4 +56,17 @@ export async function assertLoggedIn(page: Page): Promise<void> {
   }
   const user = JSON.parse(body) as { isAuthenticated?: boolean };
   if (!user.isAuthenticated) throw new Error("The saved session has expired. Run 'mhp-dns login' again.");
+}
+
+export async function waitForLogin(page: Page, timeout = 5 * 60_000): Promise<void> {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    try {
+      await assertLoggedIn(page);
+      return;
+    } catch {
+      await page.waitForTimeout(1_000);
+    }
+  }
+  throw new Error("Timed out waiting for login.");
 }

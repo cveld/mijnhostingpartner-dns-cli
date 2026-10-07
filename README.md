@@ -55,11 +55,19 @@ npx skills add cveld/mijnhostingpartner-dns-cli --skill mijnhostingpartner-dns -
 npx mijnhostingpartner-dns-cli login
 ```
 
-The CLI opens Chrome in headed mode. Sign in manually, complete MFA if required, and then press Enter in the terminal. Cookies and session data are stored outside the repository in `~/.mhp-dns/browser-profile`.
+The CLI opens Chrome in headed mode. Sign in manually and complete MFA if required. The CLI detects a successful login automatically and then closes Chrome. Cookies and session data are stored outside the repository in `~/.mhp-dns/`.
 
 ## Register a domain
 
-Copy the URL of the domain's DNS records page from the control panel:
+After signing in, let the CLI find and save the identifiers for a domain from the control panel:
+
+```powershell
+npx mijnhostingpartner-dns-cli domain discover example.nl
+```
+
+This is the preferred flow; users do not need to copy internal identifiers or URLs.
+
+As a fallback, copy the URL of the domain's DNS records page from the control panel:
 
 ```powershell
 npx mijnhostingpartner-dns-cli domain add example.nl --url "https://control.mijnhostingpartner.nl/account/domains/dns-records?userId=123&packageId=456&id=789"
@@ -67,10 +75,11 @@ npx mijnhostingpartner-dns-cli domain add example.nl --url "https://control.mijn
 
 Only the domain identifiers are saved. Credentials and DNS records are not written to the configuration file.
 
-If you only know the hosting package ID, discover its domains first:
+If you only know the hosting package ID, list or save its domains directly:
 
 ```powershell
 npx mijnhostingpartner-dns-cli domain discover --package-id 456
+npx mijnhostingpartner-dns-cli domain discover example.nl --package-id 456
 ```
 
 ## Usage

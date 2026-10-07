@@ -7,6 +7,7 @@ interface ConfigFile { domains: Record<string, DomainContext> }
 const home = process.env.MHP_DNS_HOME ?? join(homedir(), ".mhp-dns");
 export const profileDirectory = process.env.MHP_DNS_PROFILE ?? join(home, "browser-profile");
 export const configPath = process.env.MHP_DNS_CONFIG ?? join(home, "config.json");
+export const storageStatePath = join(home, "storage-state.json");
 
 async function load(): Promise<ConfigFile> {
   try { return JSON.parse(await readFile(configPath, "utf8")) as ConfigFile; }

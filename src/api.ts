@@ -69,6 +69,38 @@ export function dnsUrl(context: DomainContext): string {
   return url.toString();
 }
 
+export function domainContextFromDnsUrl(value: string): DomainContext | undefined {
+  try {
+    const url = new URL(value, baseUrl);
+    if (url.hostname !== new URL(baseUrl).hostname || !url.pathname.endsWith("/account/domains/dns-records")) return undefined;
+    const positiveInteger = (name: string) => {
+      const value = Number(url.searchParams.get(name));
+      return Number.isInteger(value) && value > 0 ? value : undefined;
+    };
+    const domainId = positiveInteger("id");
+    if (!domainId) return undefined;
+    return { domainId, userId: positiveInteger("userId"), packageId: positiveInteger("packageId") };
+  } catch {
+    return undefined;
+  }
+}
+
+export function packageContextFromDomainsUrl(value: string): Pick<DomainContext, "userId" | "packageId"> | undefined {
+  try {
+    const url = new URL(value, baseUrl);
+    if (url.hostname !== new URL(baseUrl).hostname || !url.pathname.endsWith("/account/domains/index")) return undefined;
+    const positiveInteger = (name: string) => {
+      const value = Number(url.searchParams.get(name));
+      return Number.isInteger(value) && value > 0 ? value : undefined;
+    };
+    const packageId = positiveInteger("packageId");
+    if (!packageId) return undefined;
+    return { userId: positiveInteger("userId"), packageId };
+  } catch {
+    return undefined;
+  }
+}
+
 export function findRecords(records: DnsRecord[], name: string, type?: string, data?: string): DnsRecord[] {
   const normalizedName = name === "@" ? "" : name;
   return records.filter(record =>

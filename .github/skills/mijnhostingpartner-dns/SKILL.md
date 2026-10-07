@@ -43,9 +43,19 @@ Als de sessie ontbreekt of verlopen is:
 & ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" login
 ```
 
-Laat de gebruiker zelf inloggen en eventuele MFA afronden. Wacht tot de gebruiker in de terminal op Enter heeft gedrukt. Het profiel staat standaard in `~/.mhp-dns/browser-profile`.
+Laat de gebruiker zelf inloggen en eventuele MFA afronden. De CLI detecteert de geslaagde login automatisch, verifieert deze op de domeinenpagina en slaat de browserstatus buiten de repository op in `~/.mhp-dns/`.
 
-## Domein configureren
+## Domein ontdekken en configureren
+
+Na de eenmalige login hoeft de gebruiker geen control-panel-URL of interne identifiers te zoeken. Laat de CLI de DNS-link op de domeinenpagina uitlezen en de identifiers opslaan:
+
+```powershell
+& ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" domain discover example.nl
+```
+
+Gebruik dit als standaardroute wanneer een domein nog niet is geconfigureerd. Vraag de gebruiker alleen om opnieuw in te loggen als de opgeslagen sessie verlopen is.
+
+Als fallback kan een DNS-recordpagina handmatig worden opgeslagen:
 
 Sla een domein eenmalig op aan de hand van diens DNS-recordpagina:
 
@@ -53,10 +63,11 @@ Sla een domein eenmalig op aan de hand van diens DNS-recordpagina:
 & ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" domain add example.nl --url "https://control.mijnhostingpartner.nl/account/domains/dns-records?userId=123&packageId=456&id=789"
 ```
 
-Als alleen een package-id bekend is, ontdek eerst de beschikbare domeinen:
+Als alleen een package-id bekend is, bekijk of configureer de beschikbare domeinen:
 
 ```powershell
 & ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" domain discover --package-id 456
+& ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" domain discover example.nl --package-id 456
 ```
 
 ## Records bekijken

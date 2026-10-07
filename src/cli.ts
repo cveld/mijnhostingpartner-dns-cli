@@ -3,9 +3,9 @@ import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
-import { MhpApi, findRecords, toRecordInput } from "./api.js";
-import { assertLoggedIn, baseUrl, getPage, openBrowser } from "./browser.js";
-import { getDomain, parseDnsUrl, profileDirectory, saveDomain } from "./config.js";
+import { MhpApi, findRecords, packageContextFromDomainsUrl, toRecordInput } from "./api.js";
+import { assertLoggedIn, baseUrl, getPage, openBrowser, waitForLogin } from "./browser.js";
+import { getDomain, parseDnsUrl, profileDirectory, saveDomain, storageStatePath } from "./config.js";
 import { recordTypes, type DnsRecord, type DnsRecordType, type RecordInput } from "./types.js";
 
 interface GlobalOptions { headed?: boolean; json?: boolean }
@@ -97,10 +97,14 @@ program.command("login")
     const page = await getPage(context);
     await page.goto(baseUrl);
     console.log(`Chrome profile: ${profileDirectory}`);
-    console.log("Log in in Chrome, then press Enter here.");
-    const prompt = createInterface({ input: stdin, output: stdout });
-    try { await prompt.question(""); await assertLoggedIn(page); }
-    finally { prompt.close(); await context.close(); }
+    console.log("Log in in Chrome. This command will continue automatically.");
+    try {
+      await waitForLogin(page);
+      await page.goto(baseUrl, { waitUntil: "networkidle" });
+      await assertLoggedIn(page);
+      await context.storageState({ path: storageStatePath });
+    }
+    finally { await context.close(); }
     console.log("Login saved.");
   });
 
@@ -114,11 +118,50 @@ domain.command("add").argument("<domain>").requiredOption("--url <url>", "DNS re
     output({ domain: found.name, domainId: found.id, config: "saved" }, globals(command).json);
   });
 
-domain.command("discover").requiredOption("--package-id <id>", "hosting package id", integer)
-  .description("list domains in a hosting package")
-  .action(async (options: { packageId: number }, command: Command) => {
-    const result = await session(command, api => api.listDomains(options.packageId));
-    output(result.data.map(item => ({ name: item.name, domainId: item.id, dnsEnabled: item.dnsEnabled })), globals(command).json);
+domain.command("discover").argument("[domain]")
+  .option("--package-id <id>", "hosting package id", integer)
+  .description("discover domain identifiers from the control panel and save a named domain")
+  .action(async (domainName: string | undefined, options: { packageId?: number }, command: Command) => {
+    if (options.packageId) {
+      const result = await session(command, api => api.listDomains(options.packageId!));
+      const domains = result.data.map(item => ({ name: item.name, domainId: item.id, dnsEnabled: item.dnsEnabled }));
+      if (!domainName) return output(domains, globals(command).json);
+      const found = result.data.find(item => item.name.toLowerCase() === domainName.toLowerCase());
+      if (!found) throw new Error(`Domain '${domainName}' was not found in package ${options.packageId}.`);
+      await saveDomain(found.name, { domainId: found.id, domainName: found.name, packageId: options.packageId, userId: found.userId ?? undefined });
+      return output({ domain: found.name, domainId: found.id, packageId: options.packageId, config: "saved" }, globals(command).json);
+    }
+
+    if (!domainName) throw new Error("Provide a domain name or --package-id.");
+    const context = await openBrowser(Boolean(globals(command).headed));
+    try {
+      const page = await getPage(context);
+      await assertLoggedIn(page);
+      await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+      const links = await page.locator('a[href*="/account/domains/index"]').evaluateAll(elements =>
+        elements.map(element => (element as HTMLAnchorElement).href));
+      const candidates = [...new Map(links
+        .map(href => packageContextFromDomainsUrl(href))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .map(item => [item.packageId, item])).values()];
+
+      const api = new MhpApi(context.request);
+      for (const candidate of candidates) {
+        const domains = await api.listDomains(candidate.packageId!);
+        const found = domains.data.find(item => item.name.toLowerCase() === domainName.toLowerCase());
+        if (!found) continue;
+        const discovered = {
+          domainId: found.id,
+          domainName: found.name,
+          userId: candidate.userId ?? found.userId ?? undefined,
+          packageId: candidate.packageId ?? found.packageId ?? undefined,
+        };
+        await saveDomain(found.name, discovered);
+        return output({ domain: found.name, ...discovered, config: "saved" }, globals(command).json);
+      }
+      throw new Error(`Domain '${domainName}' was not found in the hosting packages visible to this account.`);
+    } finally { await context.close(); }
   });
 
 program.command("list").argument("<domain>")
