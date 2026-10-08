@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
+import { emitKeypressEvents } from "node:readline";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import { MhpApi, findRecords, packageContextFromDomainsUrl, toRecordInput } from "./api.js";
-import { assertLoggedIn, baseUrl, getPage, openBrowser, waitForLogin } from "./browser.js";
+import { assertLoggedIn, baseUrl, getPage, openBrowser, submitLogin, waitForCredentialLogin, waitForLogin } from "./browser.js";
 import { getDomain, parseDnsUrl, profileDirectory, saveDomain, storageStatePath } from "./config.js";
+import { assertCredentialsFileWritable, defaultCredentialsPath, loadCredentials, saveCredentials, type CredentialProtection } from "./credentials.js";
 import { recordTypes, type DnsRecord, type DnsRecordType, type RecordInput } from "./types.js";
 
 interface GlobalOptions { headed?: boolean; json?: boolean }
@@ -47,6 +49,39 @@ async function confirm(question: string, yes?: boolean): Promise<void> {
     const answer = await prompt.question(`${question} [y/N] `);
     if (!/^y(es)?$/i.test(answer.trim())) throw new Error("Cancelled.");
   } finally { prompt.close(); }
+}
+
+async function secret(question: string): Promise<string> {
+  if (!stdin.isTTY || !stdout.isTTY || !stdin.setRawMode) {
+    throw new Error("Entering a password requires an interactive terminal.");
+  }
+  stdout.write(question);
+  emitKeypressEvents(stdin);
+  stdin.setRawMode(true);
+  stdin.resume();
+  return new Promise((resolve, reject) => {
+    let value = "";
+    const finish = () => {
+      stdin.off("keypress", onKeypress);
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdout.write("\n");
+    };
+    const onKeypress = (text: string, key: { name?: string; ctrl?: boolean }) => {
+      if (key.ctrl && key.name === "c") {
+        finish();
+        reject(new Error("Cancelled."));
+      } else if (key.name === "return" || key.name === "enter") {
+        finish();
+        resolve(value);
+      } else if (key.name === "backspace") {
+        value = value.slice(0, -1);
+      } else if (text && !key.ctrl) {
+        value += text;
+      }
+    };
+    stdin.on("keypress", onKeypress);
+  });
 }
 
 function recordOptions(command: Command): Command {
@@ -92,14 +127,27 @@ const program = new Command()
 
 program.command("login")
   .description("open Chrome and save an authenticated session")
-  .action(async () => {
-    const context = await openBrowser(true);
+  .option("--env-file <path>", "load MHP_DNS_USERNAME and MHP_DNS_PASSWORD from this .env file")
+  .action(async (options: { envFile?: string }, command: Command) => {
+    const headed = Boolean(globals(command).headed);
+    const credentials = headed ? undefined : loadCredentials(options.envFile);
+    if (!headed && !credentials) {
+      throw new Error("No credentials configured. Run 'mhp-dns credentials init', provide --env-file, or use 'mhp-dns --headed login' for interactive login.");
+    }
+    const context = await openBrowser(headed);
     const page = await getPage(context);
     await page.goto(baseUrl);
     console.log(`Chrome profile: ${profileDirectory}`);
-    console.log("Log in in Chrome. This command will continue automatically.");
+    if (credentials) {
+      console.log(`Using credentials from ${credentials.source === "env-file" ? "an .env file" : "the environment"}.`);
+      await submitLogin(page, credentials);
+      console.log("Credentials submitted in headless Chrome.");
+    } else {
+      console.log("Interactive login requested. Log in in Chrome and complete MFA if required.");
+    }
     try {
-      await waitForLogin(page);
+      if (credentials) await waitForCredentialLogin(page, false);
+      else await waitForLogin(page);
       await page.goto(baseUrl, { waitUntil: "networkidle" });
       await assertLoggedIn(page);
       await context.storageState({ path: storageStatePath });
@@ -116,6 +164,28 @@ domain.command("add").argument("<domain>").requiredOption("--url <url>", "DNS re
     if (found.name.toLowerCase() !== name.toLowerCase()) throw new Error(`URL belongs to '${found.name}', not '${name}'.`);
     await saveDomain(name, { ...parsed, domainName: found.name });
     output({ domain: found.name, domainId: found.id, config: "saved" }, globals(command).json);
+  });
+
+const credentials = program.command("credentials").description("manage optional saved login credentials");
+credentials.command("init")
+  .description("prompt for credentials and save them outside the repository")
+  .option("--path <path>", "credentials file path", defaultCredentialsPath)
+  .option("--protection <method>", "credential protection: dpapi or base64", process.platform === "win32" ? "dpapi" : "base64")
+  .option("--force", "replace an existing credentials file")
+  .action(async (options: { path: string; protection: string; force?: boolean }) => {
+    if (!(["dpapi", "base64"] as string[]).includes(options.protection)) throw new Error("Protection must be 'dpapi' or 'base64'.");
+    assertCredentialsFileWritable(options.path, Boolean(options.force));
+    if (!stdin.isTTY) throw new Error("Credential setup requires an interactive terminal.");
+    const prompt = createInterface({ input: stdin, output: stdout });
+    let username: string;
+    try { username = (await prompt.question("Login: ")).trim(); }
+    finally { prompt.close(); }
+    if (!username) throw new Error("Login cannot be empty.");
+    const password = await secret("Password: ");
+    if (!password) throw new Error("Password cannot be empty.");
+    const protection = options.protection as CredentialProtection;
+    const path = await saveCredentials({ username, password }, options.path, Boolean(options.force), protection);
+    console.log(`Credentials saved to ${path} using ${protection === "dpapi" ? "Windows DPAPI (CurrentUser)" : "Base64 encoding"}.`);
   });
 
 domain.command("discover").argument("[domain]")

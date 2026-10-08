@@ -57,6 +57,51 @@ npx mijnhostingpartner-dns-cli login
 
 The CLI opens Chrome in headed mode. Sign in manually and complete MFA if required. The CLI detects a successful login automatically and then closes Chrome. Cookies and session data are stored outside the repository in `~/.mhp-dns/`.
 
+Optionally, put the credentials in a `.env` file. Copy `.env.example` to `.env`, fill in both values, and keep the file out of source control:
+
+```dotenv
+MHP_DNS_USERNAME=your-login
+MHP_DNS_PASSWORD=your-password
+```
+
+Then run `login` normally. The CLI reads `.env` from the current directory, fills in the login form, and runs Chrome headlessly:
+
+```powershell
+npx mijnhostingpartner-dns-cli login
+```
+
+`login` requires configured credentials for its default headless flow. If no credentials are configured, it exits with instructions instead of opening a browser.
+
+Use the global option before the command to explicitly start the visible, fully interactive login flow (saved credentials are not submitted in this mode):
+
+```powershell
+npx mijnhostingpartner-dns-cli --headed login
+```
+
+Interactive MFA therefore requires `--headed`.
+
+Invalid saved credentials fail immediately with a clear error and can be replaced with:
+
+```powershell
+npx mijnhostingpartner-dns-cli credentials init --force
+```
+
+The lookup order is: existing environment variables, `--env-file`, `MHP_DNS_ENV_FILE`, `.env` in the current directory, then `~/.mhp-dns/.env`.
+
+The CLI can securely scaffold the user-profile file. The password is not echoed:
+
+```powershell
+npx mijnhostingpartner-dns-cli credentials init
+```
+
+On Windows, scaffolded credentials are encrypted by default with DPAPI using the current Windows user. Another user account or computer cannot decrypt them. On other platforms, the fallback is Base64 encoding. Select explicitly with `--protection dpapi` or `--protection base64`. Base64 is not encryption; protect such a file like a password. Use `--force` to replace an existing file. To use a file elsewhere, pass `--env-file` or set `MHP_DNS_ENV_FILE`:
+
+```powershell
+npx mijnhostingpartner-dns-cli login --env-file C:\secure\mhp.env
+```
+
+Already-set `MHP_DNS_USERNAME` and `MHP_DNS_PASSWORD` environment variables take precedence over values in the file. Do not commit a credential-bearing `.env` file.
+
 ## Register a domain
 
 After signing in, let the CLI find and save the identifiers for a domain from the control panel:
@@ -108,6 +153,13 @@ npx mijnhostingpartner-dns-cli --headed list example.nl
 | `MHP_DNS_PROFILE` | Override the browser profile directory |
 | `MHP_DNS_CONFIG` | Override the configuration file path |
 | `MHP_DNS_CHROME` | Explicit path to the Chrome executable |
+| `MHP_DNS_ENV_FILE` | Optional path to a credential `.env` file |
+| `MHP_DNS_USERNAME` | Optional control-panel login name |
+| `MHP_DNS_PASSWORD` | Optional control-panel password |
+| `MHP_DNS_USERNAME_BASE64` | Base64 login name written by `credentials init` |
+| `MHP_DNS_PASSWORD_BASE64` | Base64 password written by `credentials init` |
+| `MHP_DNS_USERNAME_DPAPI` | Windows DPAPI-protected login name |
+| `MHP_DNS_PASSWORD_DPAPI` | Windows DPAPI-protected password |
 
 ## Local development
 

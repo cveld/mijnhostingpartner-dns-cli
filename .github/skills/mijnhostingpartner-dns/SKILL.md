@@ -45,6 +45,25 @@ Als de sessie ontbreekt of verlopen is:
 
 Laat de gebruiker zelf inloggen en eventuele MFA afronden. De CLI detecteert de geslaagde login automatisch, verifieert deze op de domeinenpagina en slaat de browserstatus buiten de repository op in `~/.mhp-dns/`.
 
+De standaardlogin vereist credentials uit environment of `.env` en draait headless. Zonder credentials stopt de CLI met instructies om eerst `credentials init` te gebruiken of `--env-file` mee te geven. Alleen de globale vlag `--headed` vóór `login` start de zichtbare, volledig interactieve loginflow; opgeslagen credentials worden in die modus niet automatisch ingevuld:
+
+```powershell
+& ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" login --env-file "C:\secure\mhp.env"
+& ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" --headed login --env-file "C:\secure\mhp.env"
+```
+
+De zoekvolgorde is: bestaande environmentvariabelen, `--env-file`, `MHP_DNS_ENV_FILE`, `.env` in de huidige directory en ten slotte `~/.mhp-dns/.env`.
+
+Als `login` meldt dat de gebruikersnaam of het wachtwoord ongeldig is, vertel dit zonder de waarden te tonen. Bied aan `credentials init --force` uit te voeren, maar doe dit pas na expliciete toestemming omdat het bestaande credentialbestand wordt vervangen.
+
+Als de gebruiker credentials wil bewaren maar nog geen bestand heeft, laat de CLI dit interactief aanmaken. Het wachtwoord wordt niet weergegeven:
+
+```powershell
+& ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" credentials init
+```
+
+Vraag vooraf toestemming omdat dit credentials op schijf bewaart. Op Windows gebruikt het scaffold standaard DPAPI met scope `CurrentUser`; alleen dezelfde Windows-gebruiker op dezelfde machine kan de waarden ontsleutelen. Op andere platforms valt het terug op Base64, wat geen encryptie is. Met `--protection dpapi|base64` kan de methode expliciet worden gekozen. Gebruik `--force` alleen als de gebruiker expliciet heeft bevestigd dat het bestaande bestand vervangen mag worden. Zet credentials nooit in chat, logs of de repository en commit geen `.env`.
+
 ## Domein ontdekken en configureren
 
 Na de eenmalige login hoeft de gebruiker geen control-panel-URL of interne identifiers te zoeken. Laat de CLI de DNS-link op de domeinenpagina uitlezen en de identifiers opslaan:

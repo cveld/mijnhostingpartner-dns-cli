@@ -1,6 +1,7 @@
 import { access, mkdir, readFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright-core";
 import { profileDirectory, storageStatePath } from "./config.js";
+import type { Credentials } from "./credentials.js";
 
 export const baseUrl = "https://control.mijnhostingpartner.nl";
 
@@ -69,4 +70,39 @@ export async function waitForLogin(page: Page, timeout = 5 * 60_000): Promise<vo
     }
   }
   throw new Error("Timed out waiting for login.");
+}
+
+export async function submitLogin(page: Page, credentials: Credentials): Promise<void> {
+  const username = page.locator("#inputUser, input[placeholder='Login']").first();
+  const password = page.locator("input[type='password']").first();
+  await username.waitFor({ state: "visible" });
+  await username.fill(credentials.username);
+  await password.fill(credentials.password);
+  await page.getByRole("button", { name: /sign in/i }).click();
+}
+
+export async function waitForCredentialLogin(page: Page, headed: boolean, timeout = 5 * 60_000): Promise<void> {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const error = page.locator(".alert-danger, [role='alert']").filter({ hasText: /invalid username or password/i }).first();
+    if (await error.isVisible().catch(() => false)) {
+      throw new Error("Invalid username or password. Update the saved credentials with 'mhp-dns credentials init --force'.");
+    }
+    try {
+      await assertLoggedIn(page);
+      return;
+    } catch {
+      if (!headed && page.url().toLowerCase().includes("/auth/login")) {
+        const loginButton = page.getByRole("button", { name: /sign in/i });
+        if (await loginButton.isVisible().catch(() => false) && Date.now() + 2_000 < deadline) {
+          await page.waitForTimeout(250);
+          continue;
+        }
+      }
+      await page.waitForTimeout(1_000);
+    }
+  }
+  throw new Error(headed
+    ? "Timed out waiting for login or MFA completion."
+    : "Login did not complete. Run 'mhp-dns --headed login' if interactive MFA is required.");
 }

@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import type { DomainContext } from "./types.js";
 
 interface ConfigFile { domains: Record<string, DomainContext> }
-const home = process.env.MHP_DNS_HOME ?? join(homedir(), ".mhp-dns");
+export const homeDirectory = process.env.MHP_DNS_HOME ?? join(homedir(), ".mhp-dns");
+const home = homeDirectory;
 export const profileDirectory = process.env.MHP_DNS_PROFILE ?? join(home, "browser-profile");
 export const configPath = process.env.MHP_DNS_CONFIG ?? join(home, "config.json");
 export const storageStatePath = join(home, "storage-state.json");
