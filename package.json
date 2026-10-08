@@ -1,6 +1,6 @@
 {
   "name": "mijnhostingpartner-dns-cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Manage MijnHostingPartner DNS records from the command line.",
   "license": "MIT",
   "author": "Carl in 't Veld",
