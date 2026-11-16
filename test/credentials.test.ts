@@ -5,13 +5,14 @@ import { join } from "node:path";
 import test from "node:test";
 import { assertCredentialsFileWritable, findCredentialsFile, loadCredentials, saveCredentials } from "../src/credentials.js";
 
-const keys = ["MHP_DNS_USERNAME", "MHP_DNS_PASSWORD", "MHP_DNS_USERNAME_BASE64", "MHP_DNS_PASSWORD_BASE64", "MHP_DNS_USERNAME_DPAPI", "MHP_DNS_PASSWORD_DPAPI", "MHP_DNS_ENV_FILE"] as const;
+const keys = ["MHP_DNS_KEYRING", "MHP_DNS_KEYRING_SERVICE", "MHP_DNS_USERNAME", "MHP_DNS_PASSWORD", "MHP_DNS_USERNAME_BASE64", "MHP_DNS_PASSWORD_BASE64", "MHP_DNS_USERNAME_DPAPI", "MHP_DNS_PASSWORD_DPAPI", "MHP_DNS_ENV_FILE"] as const;
 
 async function isolated(run: (directory: string) => Promise<void>): Promise<void> {
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const directory = await mkdtemp(join(tmpdir(), "mhp-dns-credentials-"));
   try {
     for (const key of keys) delete process.env[key];
+    process.env.MHP_DNS_KEYRING = "off"; // never touch the real Credential Manager entries
     await run(directory);
   } finally {
     for (const key of keys) {
@@ -66,7 +67,7 @@ test("scaffolds an escaped credential file and refuses accidental overwrite", as
   assert.deepEqual(loadCredentials(path), {
     username: "test user", password: "quote\" and # hash", source: "env-file",
   });
-  await assert.rejects(saveCredentials({ username: "other", password: "secret" }, path), /already exists/);
+  await assert.rejects(saveCredentials({ username: "other", password: "secret" }, path, false, "base64"), /already exists/);
   assert.throws(() => assertCredentialsFileWritable(path), /already exists/);
   assert.equal(assertCredentialsFileWritable(path, true), path);
 }));
@@ -80,4 +81,24 @@ test("protects scaffolded credentials with the current Windows user DPAPI key", 
   assert.deepEqual(loadCredentials(path), {
     username: "dpapi-user", password: "dpapi-secret", source: "env-file",
   });
+}));
+
+test("stores credentials in Windows Credential Manager and prefers them over an implicit file", { skip: process.platform !== "win32" }, async () => isolated(async directory => {
+  const { createRequire } = await import("node:module");
+  const { Entry } = createRequire(import.meta.url)("@napi-rs/keyring") as { Entry: new (service: string, account: string) => { deletePassword(): boolean } };
+  const service = `mhp-dns-cli-test-${process.pid}-${Date.now()}`;
+  process.env.MHP_DNS_KEYRING_SERVICE = service; // an isolated service name, never the real one
+  delete process.env.MHP_DNS_KEYRING;
+  try {
+    assert.equal(await saveCredentials({ username: "cm-user", password: "cm-secret" }, undefined, false, "credential-manager"), "Windows Credential Manager");
+    assert.deepEqual(loadCredentials(), { username: "cm-user", password: "cm-secret", source: "credential-manager" });
+    await assert.rejects(saveCredentials({ username: "other", password: "x" }, undefined, false, "credential-manager"), /already holds credentials/);
+    // An explicit env file still wins over the stored credentials.
+    const path = join(directory, "credentials.env");
+    await writeFile(path, "MHP_DNS_USERNAME=file-user\nMHP_DNS_PASSWORD=file-password\n");
+    assert.deepEqual(loadCredentials(path), { username: "file-user", password: "file-password", source: "env-file" });
+  } finally {
+    new Entry(service, "username").deletePassword();
+    new Entry(service, "password").deletePassword();
+  }
 }));

@@ -63,7 +63,7 @@ Als de gebruiker credentials wil bewaren maar nog geen bestand heeft, laat de CL
 & ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" credentials init
 ```
 
-Vraag vooraf toestemming omdat dit credentials op schijf bewaart. Op Windows gebruikt het scaffold standaard DPAPI met scope `CurrentUser`; alleen dezelfde Windows-gebruiker op dezelfde machine kan de waarden ontsleutelen. Op andere platforms valt het terug op Base64, wat geen encryptie is. Met `--protection dpapi|base64` kan de methode expliciet worden gekozen. Gebruik `--force` alleen als de gebruiker expliciet heeft bevestigd dat het bestaande bestand vervangen mag worden. Zet credentials nooit in chat, logs of de repository en commit geen `.env`.
+Vraag vooraf toestemming omdat dit credentials bewaart. Op Windows gebruikt het scaffold standaard Windows Credential Manager (service `mhp-dns-cli`); alleen dezelfde Windows-gebruiker kan de waarden lezen en er wordt geen bestand geschreven. Bestaande `*_DPAPI`-bestanden blijven werken en worden bij eerste gebruik naar Credential Manager gekopieerd. Op andere platforms valt het terug op Base64, wat geen encryptie is. Met `--protection credential-manager|dpapi|base64` kan de methode expliciet worden gekozen. Gebruik `--force` alleen als de gebruiker expliciet heeft bevestigd dat bestaande opgeslagen credentials vervangen mogen worden. Zet credentials nooit in chat, logs of de repository en commit geen `.env`.
 
 ## Domein ontdekken en configureren
 

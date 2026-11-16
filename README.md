@@ -2,7 +2,7 @@
 
 A command-line tool for managing DNS records at [MijnHostingPartner.nl](https://www.mijnhostingpartner.nl/).
 
-The CLI uses native Node.js HTTP requests and a persisted cookie jar for login and DNS commands. Normal operation does not start Chrome or load Playwright. The existing DPAPI-protected Windows credentials are reused without changing their format.
+The CLI uses native Node.js HTTP requests and a persisted cookie jar for login and DNS commands. Normal operation does not start Chrome or load Playwright. Credentials live in Windows Credential Manager (no child process involved); existing DPAPI-protected files are still read and moved there on first use.
 
 Playwright is loaded only when you explicitly pass `--headed`, for interactive MFA/CAPTCHA login or first-time hosting-package discovery.
 
@@ -90,7 +90,7 @@ An unsuccessful HTTP login reports a generic credential/MFA error without printi
 npx mijnhostingpartner-dns-cli credentials init --force
 ```
 
-The lookup order is: existing environment variables, `--env-file`, `MHP_DNS_ENV_FILE`, `.env` in the current directory, then `~/.mhp-dns/.env`.
+The lookup order is: complete `MHP_DNS_USERNAME`/`MHP_DNS_PASSWORD` environment variables, then (unless `--env-file` or `MHP_DNS_ENV_FILE` is given) Windows Credential Manager, then `.env` in the current directory, then `~/.mhp-dns/.env`. Set `MHP_DNS_KEYRING=off` to skip Credential Manager.
 
 The CLI can securely scaffold the user-profile file. The password is not echoed:
 
@@ -98,7 +98,7 @@ The CLI can securely scaffold the user-profile file. The password is not echoed:
 npx mijnhostingpartner-dns-cli credentials init
 ```
 
-On Windows, scaffolded credentials are encrypted by default with DPAPI using the current Windows user. Another user account or computer cannot decrypt them. On other platforms, the fallback is Base64 encoding. Select explicitly with `--protection dpapi` or `--protection base64`. Base64 is not encryption; protect such a file like a password. Use `--force` to replace an existing file. To use a file elsewhere, pass `--env-file` or set `MHP_DNS_ENV_FILE`:
+On Windows, `credentials init` stores the login in Windows Credential Manager by default (service `mhp-dns-cli`, accounts `username` and `password`), so nothing is written to a file. Credential Manager is per Windows user; another user account or computer cannot read it. A legacy `~/.mhp-dns/.env` with `*_DPAPI` values keeps working: it is decrypted through PowerShell once and then copied to Credential Manager, after which that PowerShell call no longer runs. Decrypting DPAPI through PowerShell is what endpoint protection such as Defender flags as suspicious DPAPI activity. On other platforms, the fallback is Base64 encoding. Select explicitly with `--protection credential-manager`, `--protection dpapi` or `--protection base64`. Base64 is not encryption; protect such a file like a password. Use `--force` to replace an existing file. To use a file elsewhere, pass `--env-file` or set `MHP_DNS_ENV_FILE`:
 
 ```powershell
 npx mijnhostingpartner-dns-cli login --env-file C:\secure\mhp.env

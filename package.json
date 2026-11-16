@@ -39,6 +39,7 @@
     "test": "node --test --import tsx test/*.test.ts"
   },
   "dependencies": {
+    "@napi-rs/keyring": "^2.1.2",
     "commander": "^14.0.1",
     "playwright-core": "^1.55.1",
     "tough-cookie": "^6.1.0"

@@ -7,7 +7,7 @@ import { Command } from "commander";
 import { MhpApi, findRecords, packageContextFromDomainsUrl, toRecordInput } from "./api.js";
 import { MhpHttp, baseUrl, httpSessionPath } from "./http.js";
 import { configuredDomains, getDomain, parseDnsUrl, profileDirectory, saveDomain, storageStatePath } from "./config.js";
-import { assertCredentialsFileWritable, defaultCredentialsPath, loadCredentials, saveCredentials, type CredentialProtection } from "./credentials.js";
+import { assertCredentialManagerWritable, assertCredentialsFileWritable, credentialManagerLabel, defaultCredentialsPath, loadCredentials, saveCredentials, type CredentialProtection } from "./credentials.js";
 import { recordTypes, type DnsRecord, type DnsRecordType, type RecordInput } from "./types.js";
 
 interface GlobalOptions { headed?: boolean; json?: boolean }
@@ -181,12 +181,13 @@ domain.command("add").argument("<domain>").requiredOption("--url <url>", "DNS re
 const credentials = program.command("credentials").description("manage optional saved login credentials");
 credentials.command("init")
   .description("prompt for credentials and save them outside the repository")
-  .option("--path <path>", "credentials file path", defaultCredentialsPath)
-  .option("--protection <method>", "credential protection: dpapi or base64", process.platform === "win32" ? "dpapi" : "base64")
-  .option("--force", "replace an existing credentials file")
+  .option("--path <path>", "credentials file path (dpapi and base64 only)", defaultCredentialsPath)
+  .option("--protection <method>", "credential store: credential-manager, dpapi or base64", process.platform === "win32" ? "credential-manager" : "base64")
+  .option("--force", "replace existing saved credentials")
   .action(async (options: { path: string; protection: string; force?: boolean }) => {
-    if (!(["dpapi", "base64"] as string[]).includes(options.protection)) throw new Error("Protection must be 'dpapi' or 'base64'.");
-    assertCredentialsFileWritable(options.path, Boolean(options.force));
+    if (!(["credential-manager", "dpapi", "base64"] as string[]).includes(options.protection)) throw new Error("Protection must be 'credential-manager', 'dpapi' or 'base64'.");
+    if (options.protection === "credential-manager") assertCredentialManagerWritable(Boolean(options.force));
+    else assertCredentialsFileWritable(options.path, Boolean(options.force));
     if (!stdin.isTTY) throw new Error("Credential setup requires an interactive terminal.");
     const prompt = createInterface({ input: stdin, output: stdout });
     let username: string;
@@ -197,7 +198,9 @@ credentials.command("init")
     if (!password) throw new Error("Password cannot be empty.");
     const protection = options.protection as CredentialProtection;
     const path = await saveCredentials({ username, password }, options.path, Boolean(options.force), protection);
-    console.log(`Credentials saved to ${path} using ${protection === "dpapi" ? "Windows DPAPI (CurrentUser)" : "Base64 encoding"}.`);
+    console.log(protection === "credential-manager"
+      ? `Credentials saved to ${credentialManagerLabel}.`
+      : `Credentials saved to ${path} using ${protection === "dpapi" ? "Windows DPAPI (CurrentUser)" : "Base64 encoding"}.`);
   });
 
 domain.command("discover").argument("[domain]")

@@ -6,6 +6,9 @@ import { join } from "node:path";
 import { baseUrl, MhpHttp } from "../src/http.js";
 import { MhpApi } from "../src/api.js";
 
+// Tests must never touch the real Windows Credential Manager entries.
+process.env.MHP_DNS_KEYRING = "off";
+
 const json = (value: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", ...headers } });
 
