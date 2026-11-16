@@ -2,7 +2,9 @@
 
 A command-line tool for managing DNS records at [MijnHostingPartner.nl](https://www.mijnhostingpartner.nl/).
 
-The CLI uses Playwright to keep an authenticated Chrome profile. After authentication, commands call the control panel's internal JSON endpoints directly, which is faster and less brittle than automating UI interactions.
+The CLI uses native Node.js HTTP requests and a persisted cookie jar for login and DNS commands. Normal operation does not start Chrome or load Playwright. The existing DPAPI-protected Windows credentials are reused without changing their format.
+
+Playwright is loaded only when you explicitly pass `--headed`, for interactive MFA/CAPTCHA login or first-time hosting-package discovery.
 
 > [!WARNING]
 > This project uses an undocumented control-panel API. MijnHostingPartner may change its endpoints or payloads without notice.
@@ -10,7 +12,7 @@ The CLI uses Playwright to keep an authenticated Chrome profile. After authentic
 ## Requirements
 
 - Node.js 22 or newer
-- Google Chrome
+- Google Chrome only for the optional `--headed` interactive flow
 - A MijnHostingPartner account with access to the domain
 
 ## Run with npx
@@ -55,7 +57,9 @@ npx skills add cveld/mijnhostingpartner-dns-cli --skill mijnhostingpartner-dns -
 npx mijnhostingpartner-dns-cli login
 ```
 
-The CLI opens Chrome in headed mode. Sign in manually and complete MFA if required. The CLI detects a successful login automatically and then closes Chrome. Cookies and session data are stored outside the repository in `~/.mhp-dns/`.
+The CLI signs in directly over HTTPS using configured credentials and verifies the session through `CurrentUserInfo`. Cookies are saved outside the repository in `~/.mhp-dns/http-session.json`. This file contains authentication material: protect it like a password and never commit or share it.
+
+An existing `storage-state.json` from an interactive browser login is imported automatically when no HTTP session exists. Subsequent commands reuse the HTTP cookies; an expired session is refreshed with configured credentials before the command runs. DNS mutations are never automatically replayed after a transport error.
 
 Optionally, put the credentials in a `.env` file. Copy `.env.example` to `.env`, fill in both values, and keep the file out of source control:
 
@@ -64,13 +68,13 @@ MHP_DNS_USERNAME=your-login
 MHP_DNS_PASSWORD=your-password
 ```
 
-Then run `login` normally. The CLI reads `.env` from the current directory, fills in the login form, and runs Chrome headlessly:
+Then run `login` normally. The CLI reads `.env` from the current directory and submits the credentials directly over HTTPS:
 
 ```powershell
 npx mijnhostingpartner-dns-cli login
 ```
 
-`login` requires configured credentials for its default headless flow. If no credentials are configured, it exits with instructions instead of opening a browser.
+`login` requires configured credentials for its default browser-free flow. If no credentials are configured, it exits with instructions instead of opening a browser.
 
 Use the global option before the command to explicitly start the visible, fully interactive login flow (saved credentials are not submitted in this mode):
 
@@ -78,9 +82,9 @@ Use the global option before the command to explicitly start the visible, fully 
 npx mijnhostingpartner-dns-cli --headed login
 ```
 
-Interactive MFA therefore requires `--headed`.
+Interactive MFA/CAPTCHA therefore requires `--headed`. The HTTP flow never bypasses these checks or opens a browser silently. After a successful interactive login, the HTTP cookie jar is refreshed for later browser-free commands.
 
-Invalid saved credentials fail immediately with a clear error and can be replaced with:
+An unsuccessful HTTP login reports a generic credential/MFA error without printing the provider response or secrets. Credentials can be replaced with:
 
 ```powershell
 npx mijnhostingpartner-dns-cli credentials init --force
@@ -110,7 +114,13 @@ After signing in, let the CLI find and save the identifiers for a domain from th
 npx mijnhostingpartner-dns-cli domain discover example.nl
 ```
 
-This is the preferred flow; users do not need to copy internal identifiers or URLs.
+This uses hosting-package identifiers already saved in the configuration. If no package has been configured, provide `--package-id`, use `domain add --url`, or explicitly allow one browser-based discovery:
+
+```powershell
+npx mijnhostingpartner-dns-cli --headed domain discover example.nl
+```
+
+After that initial discovery, normal DNS operations and discovery within configured packages are browser-free.
 
 As a fallback, copy the URL of the domain's DNS records page from the control panel:
 
@@ -149,7 +159,7 @@ npx mijnhostingpartner-dns-cli --headed list example.nl
 
 | Environment variable | Purpose |
 | --- | --- |
-| `MHP_DNS_HOME` | Location of the configuration and browser profile |
+| `MHP_DNS_HOME` | Location of configuration, HTTP session and optional browser profile |
 | `MHP_DNS_PROFILE` | Override the browser profile directory |
 | `MHP_DNS_CONFIG` | Override the configuration file path |
 | `MHP_DNS_CHROME` | Explicit path to the Chrome executable |
@@ -175,6 +185,9 @@ npm link
 
 The following control-panel endpoints were discovered:
 
+- `POST /api/Auth/CurrentUserInfo`
+- `POST /api/Auth/IsCaptchaRequired`
+- `POST /api/Auth/Login` with `Login`, `Password`, and `IsExternal: false`
 - `POST /api/Account/DomainDns/GetDnsZoneRecords`
 - `POST /api/Account/DomainDns/AddDnsZoneRecord`
 - `POST /api/Account/DomainDns/UpdateDnsZoneRecord`
@@ -183,6 +196,8 @@ The following control-panel endpoints were discovered:
 - `POST /api/Account/Domain/GetDomainsPagedList`
 
 The public Swagger page only describes the separate Automation Connector and does not include these DNS endpoints.
+
+The direct transport uses TLS verification, a standards-aware `tough-cookie` jar, a 45-second request timeout, and a fixed provider origin. It rejects redirects instead of forwarding credentials to another location and does not include raw response bodies in error messages. Session files are written atomically with restrictive permissions on platforms that support Unix modes; on Windows, protect `~/.mhp-dns/` through its user-profile ACLs.
 
 ## Releases and npm publishing
 

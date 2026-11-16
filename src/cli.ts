@@ -5,8 +5,8 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import { MhpApi, findRecords, packageContextFromDomainsUrl, toRecordInput } from "./api.js";
-import { assertLoggedIn, baseUrl, getPage, openBrowser, submitLogin, waitForCredentialLogin, waitForLogin } from "./browser.js";
-import { getDomain, parseDnsUrl, profileDirectory, saveDomain, storageStatePath } from "./config.js";
+import { MhpHttp, baseUrl, httpSessionPath } from "./http.js";
+import { configuredDomains, getDomain, parseDnsUrl, profileDirectory, saveDomain, storageStatePath } from "./config.js";
 import { assertCredentialsFileWritable, defaultCredentialsPath, loadCredentials, saveCredentials, type CredentialProtection } from "./credentials.js";
 import { recordTypes, type DnsRecord, type DnsRecordType, type RecordInput } from "./types.js";
 
@@ -15,7 +15,14 @@ const packageVersion = (createRequire(import.meta.url)("../package.json") as { v
 const globals = (command: Command) => command.optsWithGlobals<GlobalOptions>();
 
 async function session<T>(command: Command, action: (api: MhpApi) => Promise<T>): Promise<T> {
-  const context = await openBrowser(Boolean(globals(command).headed));
+  if (!globals(command).headed) {
+    const http = await MhpHttp.open();
+    await http.ensureAuthenticated();
+    try { return await action(new MhpApi(http)); }
+    finally { await http.save(); }
+  }
+  const { openBrowser, getPage, assertLoggedIn } = await import("./browser.js");
+  const context = await openBrowser(true);
   try {
     const page = await getPage(context);
     await assertLoggedIn(page);
@@ -120,13 +127,13 @@ function displayRecords(records: DnsRecord[]): object[] {
 
 const program = new Command()
   .name("mhp-dns")
-  .description("Manage MijnHostingPartner DNS through its control-panel API and a persisted Playwright login.")
+  .description("Manage MijnHostingPartner DNS through direct HTTP and a persisted cookie session.")
   .version(packageVersion)
   .option("--headed", "show Chrome while running")
   .option("--json", "write machine-readable JSON");
 
 program.command("login")
-  .description("open Chrome and save an authenticated session")
+  .description("sign in through HTTP; use --headed for interactive Chrome login")
   .option("--env-file <path>", "load MHP_DNS_USERNAME and MHP_DNS_PASSWORD from this .env file")
   .action(async (options: { envFile?: string }, command: Command) => {
     const headed = Boolean(globals(command).headed);
@@ -134,23 +141,28 @@ program.command("login")
     if (!headed && !credentials) {
       throw new Error("No credentials configured. Run 'mhp-dns credentials init', provide --env-file, or use 'mhp-dns --headed login' for interactive login.");
     }
-    const context = await openBrowser(headed);
-    const page = await getPage(context);
-    await page.goto(baseUrl);
-    console.log(`Chrome profile: ${profileDirectory}`);
-    if (credentials) {
-      console.log(`Using credentials from ${credentials.source === "env-file" ? "an .env file" : "the environment"}.`);
-      await submitLogin(page, credentials);
-      console.log("Credentials submitted in headless Chrome.");
-    } else {
-      console.log("Interactive login requested. Log in in Chrome and complete MFA if required.");
+    if (!headed) {
+      const http = await MhpHttp.open();
+      await http.login(credentials!);
+      console.log("HTTP login saved; no browser started.");
+      return;
     }
+    const { openBrowser, getPage, waitForLogin, assertLoggedIn } = await import("./browser.js");
+    const context = await openBrowser(headed);
     try {
-      if (credentials) await waitForCredentialLogin(page, false);
-      else await waitForLogin(page);
+      const page = await getPage(context);
+      await page.goto(baseUrl);
+      console.log(`Chrome profile: ${profileDirectory}`);
+      console.log("Interactive login requested. Log in in Chrome and complete MFA if required.");
+      await waitForLogin(page);
       await page.goto(baseUrl, { waitUntil: "networkidle" });
       await assertLoggedIn(page);
       await context.storageState({ path: storageStatePath });
+      // Replace stale HTTP cookies with the newly completed interactive login.
+      const { rm } = await import("node:fs/promises");
+      await rm(httpSessionPath, { force: true });
+      const http = await MhpHttp.open();
+      await http.save();
     }
     finally { await context.close(); }
     console.log("Login saved.");
@@ -203,6 +215,26 @@ domain.command("discover").argument("[domain]")
     }
 
     if (!domainName) throw new Error("Provide a domain name or --package-id.");
+    if (!globals(command).headed) {
+      const candidates = [...new Map((await configuredDomains())
+        .filter(item => item.packageId).map(item => [item.packageId, item])).values()];
+      if (!candidates.length) {
+        throw new Error("No hosting package is configured. Provide --package-id, use 'domain add --url', or request '--headed domain discover' once.");
+      }
+      return session(command, async api => {
+        for (const candidate of candidates) {
+          const domains = await api.listDomains(candidate.packageId!);
+          const found = domains.data.find(item => item.name.toLowerCase() === domainName.toLowerCase());
+          if (!found) continue;
+          const discovered = { domainId: found.id, domainName: found.name,
+            userId: candidate.userId ?? found.userId ?? undefined, packageId: candidate.packageId };
+          await saveDomain(found.name, discovered);
+          return output({ domain: found.name, ...discovered, config: "saved" }, globals(command).json);
+        }
+        throw new Error(`Domain '${domainName}' was not found in the configured hosting packages. Provide --package-id or use '--headed domain discover'.`);
+      });
+    }
+    const { openBrowser, getPage, assertLoggedIn } = await import("./browser.js");
     const context = await openBrowser(Boolean(globals(command).headed));
     try {
       const page = await getPage(context);

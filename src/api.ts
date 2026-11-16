@@ -1,5 +1,4 @@
-import type { APIRequestContext } from "playwright-core";
-import { baseUrl } from "./browser.js";
+import { baseUrl, type ApiTransport } from "./http.js";
 import type { DnsRecord, Domain, DomainContext, DomainPage, RecordInput } from "./types.js";
 
 function dnsRecord(input: RecordInput): Record<string, unknown> {
@@ -16,14 +15,15 @@ function dnsRecord(input: RecordInput): Record<string, unknown> {
 }
 
 export class MhpApi {
-  public constructor(private readonly request: APIRequestContext) {}
+  public constructor(private readonly request: ApiTransport) {}
 
   private async post<T>(path: string, data: unknown): Promise<T> {
     const response = await this.request.post(`${baseUrl}${path}`, { data });
     const text = await response.text();
-    if (!response.ok()) throw new Error(`${path} failed (${response.status()}): ${text || response.statusText()}`);
+    if (!response.ok()) throw new Error(`${path} failed (HTTP ${response.status()}).`);
     if (!text) return undefined as T;
-    return JSON.parse(text) as T;
+    try { return JSON.parse(text) as T; }
+    catch { throw new Error(`Invalid provider JSON for ${path}.`); }
   }
 
   listRecords(domainId: number): Promise<DnsRecord[]> {

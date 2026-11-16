@@ -31,6 +31,10 @@ export async function getDomain(name: string): Promise<DomainContext> {
   return context;
 }
 
+export async function configuredDomains(): Promise<DomainContext[]> {
+  return Object.values((await load()).domains);
+}
+
 export function parseDnsUrl(value: string): DomainContext {
   const url = new URL(value);
   if (url.hostname !== "control.mijnhostingpartner.nl" || !url.pathname.endsWith("/account/domains/dns-records")) {

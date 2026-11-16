@@ -40,7 +40,8 @@
   },
   "dependencies": {
     "commander": "^14.0.1",
-    "playwright-core": "^1.55.1"
+    "playwright-core": "^1.55.1",
+    "tough-cookie": "^6.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.7.0",

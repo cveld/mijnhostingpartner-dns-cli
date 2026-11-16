@@ -1,7 +1,6 @@
 ---
 name: mijnhostingpartner-dns
-description: Beheer DNS-records bij MijnHostingPartner.nl met de lokale mhp-dns CLI. Gebruik deze skill altijd wanneer de gebruiker DNS-records bij MijnHostingPartner wil bekijken, toevoegen, wijzigen of verwijderen, een MijnHostingPartner-login of Playwright-sessie wil instellen, een control.mijnhostingpartner.nl DNS-URL deelt, of mhp-dns noemt. Gebruik de bestaande CLI en de opgeslagen Playwright-browserlogin in plaats van zelf de website te automatiseren.
-compatibility: Vereist Node.js 22+, Google Chrome en deze repository. Werkt op Windows, macOS en Linux.
+description: Manage MijnHostingPartner DNS records and login using the local mhp-dns CLI. Use for MijnHostingPartner DNS requests, mhp-dns commands, or control-panel DNS URLs; use the HTTP client rather than automating the website.
 metadata:
   author: cveld
   version: "0.1"
@@ -9,7 +8,9 @@ metadata:
 
 # MijnHostingPartner DNS
 
-Gebruik de CLI in deze repository voor DNS-beheer. De CLI start Chrome met een apart persistent profiel. Alleen `login` is standaard headed; andere opdrachten zijn headless tenzij `--headed` wordt meegegeven.
+Requires Node.js 22+ and this repository. Chrome is needed only for explicitly requested interactive login/discovery.
+
+Use the CLI in this repository for DNS management. Default login and DNS commands use native HTTP and persisted cookies, without Chrome or Playwright. Use `--headed` only when interactive MFA/CAPTCHA or first-time package discovery is needed. Read the README for credential setup details.
 
 ## Veiligheidsregels
 
@@ -43,9 +44,9 @@ Als de sessie ontbreekt of verlopen is:
 & ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" login
 ```
 
-Laat de gebruiker zelf inloggen en eventuele MFA afronden. De CLI detecteert de geslaagde login automatisch, verifieert deze op de domeinenpagina en slaat de browserstatus buiten de repository op in `~/.mhp-dns/`.
+Default login uses configured credentials directly over verified HTTPS and checks `CurrentUserInfo`. It saves cookies outside the repository in `~/.mhp-dns/http-session.json`. An existing interactive browser login is imported when no HTTP session exists. Expired sessions are refreshed with configured credentials before running the command; mutations are not automatically retried.
 
-De standaardlogin vereist credentials uit environment of `.env` en draait headless. Zonder credentials stopt de CLI met instructies om eerst `credentials init` te gebruiken of `--env-file` mee te geven. Alleen de globale vlag `--headed` vóór `login` start de zichtbare, volledig interactieve loginflow; opgeslagen credentials worden in die modus niet automatisch ingevuld:
+The default login requires credentials from environment or `.env`, including the existing DPAPI-protected Windows file. Without credentials it stops with setup instructions. Only the global `--headed` flag explicitly starts visible interactive Chrome; saved credentials are not automatically submitted in that mode. Let the user complete MFA/CAPTCHA and never bypass it:
 
 ```powershell
 & ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" login --env-file "C:\secure\mhp.env"
@@ -66,13 +67,13 @@ Vraag vooraf toestemming omdat dit credentials op schijf bewaart. Op Windows geb
 
 ## Domein ontdekken en configureren
 
-Na de eenmalige login hoeft de gebruiker geen control-panel-URL of interne identifiers te zoeken. Laat de CLI de DNS-link op de domeinenpagina uitlezen en de identifiers opslaan:
+After login, discovery uses package identifiers already saved in the configuration:
 
 ```powershell
 & ".github/skills/mijnhostingpartner-dns/scripts/mhp-dns.ps1" domain discover example.nl
 ```
 
-Gebruik dit als standaardroute wanneer een domein nog niet is geconfigureerd. Vraag de gebruiker alleen om opnieuw in te loggen als de opgeslagen sessie verlopen is.
+If no package is configured, provide `--package-id`, use the DNS URL fallback below, or explicitly request one browser-based discovery with `--headed domain discover example.nl`. Later commands use HTTP. Do not start Chrome silently.
 
 Als fallback kan een DNS-recordpagina handmatig worden opgeslagen:
 
@@ -114,7 +115,7 @@ Zonder `--yes` vraagt de CLI zelf om bevestiging. Voor debugging kan `--headed` 
 
 ## Implementatiedetails
 
-De CLI gebruikt de cookie-authenticatie uit het Playwright-profiel en roept deze interne endpoints aan:
+The default transport is `src/http.ts`: native fetch, a standards-aware cookie jar, same-origin requests, verified TLS, no followed redirects, and no raw response bodies in errors. `src/browser.ts` is lazy-loaded only for explicit `--headed` commands. Login endpoints are `CurrentUserInfo`, `IsCaptchaRequired`, and `Login` under `/api/Auth/`. DNS payloads in `src/api.ts` retain these endpoints:
 
 - `POST /api/Account/Domain/GetDomain`
 - `POST /api/Account/Domain/GetDomainsPagedList`

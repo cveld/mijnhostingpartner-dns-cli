@@ -2,8 +2,9 @@ import { access, mkdir, readFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright-core";
 import { profileDirectory, storageStatePath } from "./config.js";
 import type { Credentials } from "./credentials.js";
+import { baseUrl } from "./http.js";
 
-export const baseUrl = "https://control.mijnhostingpartner.nl";
+export { baseUrl } from "./http.js";
 
 async function findChrome(): Promise<string | undefined> {
   const candidates = [
